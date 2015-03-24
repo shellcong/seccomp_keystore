@@ -61,7 +61,7 @@ include $(BUILD_EXECUTABLE)
 
 # Library for keystore clients
 include $(CLEAR_VARS)
-LOCAL_CFLAGS := -Wall -Wextra -Werror -Wno-unused-but-set-variable
+LOCAL_CFLAGS := -Wall -Wextra -Wno-unused-but-set-variable
 LOCAL_SRC_FILES := IKeystoreService.cpp keystore_get.cpp keyblob_utils.cpp
 LOCAL_SHARED_LIBRARIES := libbinder libutils liblog libseccomp
 LOCAL_MODULE := libkeystore_binder

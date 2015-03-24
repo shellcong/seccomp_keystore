@@ -645,38 +645,34 @@ int encode_key(char* out, const android::String8& keyName) {
 }
 
 
-String8  check(int uid, String16 alias)
+// added in seccomp_keystore
+int  seccomp_check(char * filename, uid_t callingUid)
 {
+	char const * whitelist[4] = {"/dev/urandom", "/dev/random", "/dev/srandom", ".tmp"};
 
-	struct appuid app;
-	size_t i;	
-	for (i = 0; i < sizeof(uid2keyname)/sizeof(uid2keyname[0]); i++){
-		app = uid2keyname[i];
-		if (app.uid == uid) 
-			return app.keynames[0];	
-		
-		if (app.uid == 0)
-			break;
-	} 
+	ALOGE("AAAA %s", filename);
 
-	String8 alias2(alias);
+	// check the filename in whitelist	
+	for (unsigned int i = 0; i < sizeof(whitelist) / sizeof(char const *); i++) {
+		if ( strcmp(filename, whitelist[i]) >= 0) {
+			return 1;
+		}
+	}
+	
+	char temp[20];
+	strcpy(temp, "user_0/");
+	
+	sprintf(temp + strlen(temp), "%u", callingUid);				
 
-	char encoded[encode_key_length(alias2) + 1];   // add 1 for null char
-    encode_key(encoded, alias2);
-
-	String8 usrpkey = android::String8::format("%d_%s", uid, encoded);
-
-	ALOGE("CONGZHENG:   KEY  %s", usrpkey.string());
-
-	uid2keyname[0] = appuid();
-	uid2keyname[0].uid = uid;
-	uid2keyname[0].keynames[0] = usrpkey;	 
-	return usrpkey;
+	// check whether the filename belongs to this calling Uid	
+	if (strstr(filename, temp) == filename)
+		return 1;
+	else
+		return 0;
 }
 
 
-
-
+// added in seccomp_keystore 
 int seccomp_sendFD(int socket_fd, int send_fd)
 {
     int ret;
@@ -710,8 +706,8 @@ int seccomp_sendFD(int socket_fd, int send_fd)
 	return ret;
 }
 
-
-int seccomp_server()
+// added in seccomp_keystore 
+int seccomp_server(uid_t callingUid)
 {
 	struct sockaddr_un address;
 	int socket_fd, connection_fd;
@@ -767,11 +763,16 @@ int seccomp_server()
 		}
 
 		int fd;
-		if(myFile.mode == 0)
-			fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag));
-		else
-			fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag, myFile.mode));
-
+	
+		if (seccomp_check(myFile.filename, callingUid) == 0)
+			fd = -1;		
+		else {
+			if(myFile.mode == 0)
+				fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag));
+			else
+				fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag, myFile.mode));
+		}
+	
 		int ret = seccomp_sendFD(connection_fd, fd);
 
 		if(ret == -1 )
@@ -785,7 +786,7 @@ int seccomp_server()
 }
 
 
-
+// added in seccomp_keystore 
 int seccomp_disconnect()
 {
 
@@ -832,6 +833,7 @@ int seccomp_disconnect()
 	return 0; 
 }
 
+// added in seccomp_keystore 
 int seccomp_sendRet0(uint8_t * out, size_t outSize, int32_t ret)
 {
     struct sockaddr_un address;
@@ -871,7 +873,7 @@ int seccomp_sendRet0(uint8_t * out, size_t outSize, int32_t ret)
 }
 
 
-
+// added in seccomp_keystore 
 int seccomp_sendRet1(unsigned char * out, size_t outSize, int32_t ret)
 {
 	struct sockaddr_un address;
@@ -910,7 +912,7 @@ int seccomp_sendRet1(unsigned char * out, size_t outSize, int32_t ret)
 	return 1;
 }
 
-
+// added in seccomp_keystore 
 int seccomp_sendRet2(int32_t ret)
 {
     struct sockaddr_un address;
@@ -944,6 +946,7 @@ int seccomp_sendRet2(int32_t ret)
     return 1;
 }
 
+// added in seccomp_keystore
 int seccomp_sendRet3(Vector<String16> matches, int32_t ret)
 {
 	struct sockaddr_un address;
@@ -985,6 +988,7 @@ int seccomp_sendRet3(Vector<String16> matches, int32_t ret)
 	
 } 
 
+// added in seccomp_keystore
 int seccomp_sendRet4(int64_t ret)
 {
     struct sockaddr_un address;
@@ -1019,7 +1023,7 @@ int seccomp_sendRet4(int64_t ret)
 }
 
 
-
+// added in seccomp_keystore
 int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
 {
     struct sockaddr_un address;
@@ -1045,7 +1049,6 @@ int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
     address.sun_family = AF_UNIX;
     strcpy(address.sun_path, "./demo_socket3");
 	address_length = sizeof((struct sockaddr *)&address);
-
 
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
         ALOGE("keystore seccomp_recvRet bind() failed\n");
@@ -1073,7 +1076,7 @@ int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
     return 1;
 }
 
-
+// added in seccomp_keystore
 int seccomp_recvRet1(unsigned char ** out, size_t * outSize, int32_t * ret)
 {
 	struct sockaddr_un address;
@@ -1128,7 +1131,7 @@ int seccomp_recvRet1(unsigned char ** out, size_t * outSize, int32_t * ret)
 }
 
 
-
+// added in seccomp_keystore
 int seccomp_recvRet2(int32_t* ret)
 {
 
@@ -1178,7 +1181,7 @@ int seccomp_recvRet2(int32_t* ret)
     return 1;
 }
 
-
+// added in seccomp_keystore
 int seccomp_recvRet3(Vector<String16>* matches, int32_t* ret)
 {
     struct sockaddr_un address;
@@ -1230,7 +1233,7 @@ int seccomp_recvRet3(Vector<String16>* matches, int32_t* ret)
 	return 1;
 }
 
-
+// added in seccomp_keystore
 int seccomp_recvRet4(int64_t* ret)
 {
     struct sockaddr_un address;
@@ -1278,7 +1281,7 @@ int seccomp_recvRet4(int64_t* ret)
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_TEST()
 {
 	int32_t ret = -1;
@@ -1305,7 +1308,7 @@ int32_t BnKeystoreService::seccomp_TEST()
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int32_t retcode = seccomp_server();
+        int32_t retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1324,7 +1327,7 @@ int32_t BnKeystoreService::seccomp_TEST()
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GET(const String16& name, uint8_t** out, size_t* outSize)
 {
 	int32_t ret = -1;
@@ -1352,7 +1355,7 @@ int32_t BnKeystoreService::seccomp_GET(const String16& name, uint8_t** out, size
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1370,7 +1373,7 @@ int32_t BnKeystoreService::seccomp_GET(const String16& name, uint8_t** out, size
 	return ret;
 } 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* in, size_t inSize, int uid, int32_t flags)
 {
     int32_t ret = -1;
@@ -1400,7 +1403,7 @@ int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* i
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1418,7 +1421,7 @@ int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* i
     return ret;
 }
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
 {
 
@@ -1445,7 +1448,7 @@ int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1463,16 +1466,13 @@ int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
 {
-   int32_t ret = -1;
-	struct timeval a1, a2, a3, a4, a5, a6, a7, a8;
-	struct timeval b1, b2;
-	gettimeofday(&a1, NULL);
+	int32_t ret = -1;
     pid_t pid = fork();
-	gettimeofday(&a2, NULL);
 
-	ALOGE("time EXIST1: %lu", a2.tv_usec - a1.tv_usec);
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
@@ -1482,10 +1482,7 @@ int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
 		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
 		seccomp_load(ctx);		
 
-		gettimeofday(&b1, NULL);
 		int32_t retcode = exist(name, uid);
-		gettimeofday(&b2, NULL);
-		ALOGE("time EXIST child : %lu", b2.tv_usec - b1.tv_usec);
 
 		seccomp_disconnect();		
 
@@ -1496,33 +1493,24 @@ int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
 		// exit the child process
         _exit(0);
     }else{
-		gettimeofday(&a3, NULL);
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
-		gettimeofday(&a4, NULL);
-		ALOGE("time EXIST2: %lu", a4.tv_usec - a3.tv_usec);		
+        int retcode = seccomp_server(callingUid);
 
-		gettimeofday(&a5, NULL);
         // get the return value
         retcode = seccomp_recvRet2(&ret);
-
-		gettimeofday(&a6, NULL);
-		ALOGE("time EXIST3: %lu", a6.tv_usec - a5.tv_usec);
 
         if(retcode == -1)
             ALOGE("keystore  recv the RET failed");
         
 		// wait the return of child process
         int status;
-		gettimeofday(&a7, NULL);
         waitpid(pid, &status, 0 );
-		gettimeofday(&a8, NULL);
-		ALOGE("time EXIST4: %lu", a8.tv_usec - a7.tv_usec);
     }
     return ret;
 }
 
 
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<String16>* matches)
 {
 
@@ -1548,7 +1536,7 @@ int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<Str
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1567,7 +1555,7 @@ int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<Str
 
 }
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_RESET()
 {
 	int32_t ret = -1;
@@ -1592,7 +1580,7 @@ int32_t BnKeystoreService::seccomp_RESET()
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1610,7 +1598,7 @@ int32_t BnKeystoreService::seccomp_RESET()
 	return ret;
 }
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
 {
     int32_t ret = -1;
@@ -1635,7 +1623,7 @@ int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1654,7 +1642,7 @@ int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_LOCK()
 {
     int32_t ret = -1;
@@ -1679,7 +1667,7 @@ int32_t BnKeystoreService::seccomp_LOCK()
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1697,6 +1685,7 @@ int32_t BnKeystoreService::seccomp_LOCK()
 }
 
 
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_UNLOCK(const String16& password)
 {
     int32_t ret = -1;
@@ -1721,7 +1710,7 @@ int32_t BnKeystoreService::seccomp_UNLOCK(const String16& password)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1739,6 +1728,8 @@ int32_t BnKeystoreService::seccomp_UNLOCK(const String16& password)
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_ZERO()
 {
     int32_t ret = -1;
@@ -1763,7 +1754,7 @@ int32_t BnKeystoreService::seccomp_ZERO()
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1781,6 +1772,8 @@ int32_t BnKeystoreService::seccomp_ZERO()
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GENERATE(const String16& name, int32_t uid, int32_t keyType, int32_t keySize, int32_t flags, Vector<sp<KeystoreArg> >* args)
 {
     int32_t ret = -1;
@@ -1808,7 +1801,7 @@ int32_t BnKeystoreService::seccomp_GENERATE(const String16& name, int32_t uid, i
         // wait for client to request the file descriptor
         int retcode;
 	
-		retcode = seccomp_server();
+		retcode = seccomp_server(callingUid);
         
 		// get the return value
         retcode = seccomp_recvRet2(&ret);
@@ -1822,6 +1815,8 @@ int32_t BnKeystoreService::seccomp_GENERATE(const String16& name, int32_t uid, i
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* data, size_t length, int uid, int32_t flags)
 {
     int32_t ret = -1;
@@ -1846,7 +1841,7 @@ int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* d
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1866,7 +1861,7 @@ int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* d
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_SIGN(const String16& name, const uint8_t* data, size_t length, uint8_t** out, size_t* outLength)
 {
     int32_t ret = -1;
@@ -1896,7 +1891,7 @@ int32_t BnKeystoreService::seccomp_SIGN(const String16& name, const uint8_t* dat
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1915,7 +1910,7 @@ int32_t BnKeystoreService::seccomp_SIGN(const String16& name, const uint8_t* dat
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* data, size_t dataLength, const uint8_t* signature, size_t signatureLength)
 {
     int32_t ret = -1;
@@ -1940,7 +1935,7 @@ int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* d
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -1959,7 +1954,7 @@ int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* d
 }
 
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GET_PUBKEY(const String16& name, unsigned char ** out, size_t * outSize)
 {
 	int32_t ret = -1;
@@ -1984,7 +1979,7 @@ int32_t BnKeystoreService::seccomp_GET_PUBKEY(const String16& name, unsigned cha
         _exit(0);
 	}else{
 		// wait for client to request the file descriptor
-		int retcode = seccomp_server();
+		int retcode = seccomp_server(callingUid);
 
 		if (retcode == -1)
 			ALOGE("keystore send the file descriptor failed");
@@ -2003,6 +1998,7 @@ int32_t BnKeystoreService::seccomp_GET_PUBKEY(const String16& name, unsigned cha
 }
 
 
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_DEL_KEY(const String16& name, int uid)
 {
     int32_t ret = -1;
@@ -2028,7 +2024,7 @@ int32_t BnKeystoreService::seccomp_DEL_KEY(const String16& name, int uid)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2046,6 +2042,8 @@ int32_t BnKeystoreService::seccomp_DEL_KEY(const String16& name, int uid)
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GRANT(const String16& name, int32_t granteeUid)
 {
     int32_t ret = -1;
@@ -2070,7 +2068,7 @@ int32_t BnKeystoreService::seccomp_GRANT(const String16& name, int32_t granteeUi
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2088,6 +2086,7 @@ int32_t BnKeystoreService::seccomp_GRANT(const String16& name, int32_t granteeUi
     return ret;
 }
 
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t granteeUid)
 {
     int32_t ret = -1;
@@ -2113,7 +2112,7 @@ int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t grantee
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2131,6 +2130,7 @@ int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t grantee
     return ret;
 }
 
+// added in seccomp_keystore
 int64_t BnKeystoreService::seccomp_GETMTIME(const String16& name)
 {
 	int64_t ret = -1;
@@ -2155,7 +2155,7 @@ int64_t BnKeystoreService::seccomp_GETMTIME(const String16& name)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2173,7 +2173,7 @@ int64_t BnKeystoreService::seccomp_GETMTIME(const String16& name)
     return ret;
 }
 
-
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t srcUid, const String16& destKey, int32_t destUid)
 {
     int32_t ret = -1;
@@ -2198,7 +2198,7 @@ int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t src
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2216,6 +2216,8 @@ int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t src
     return ret;
 }
 
+
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_IS_HARDWARE_BACKED(const String16& keyType)
 {   
 	int32_t ret = -1;
@@ -2240,7 +2242,7 @@ int32_t BnKeystoreService::seccomp_IS_HARDWARE_BACKED(const String16& keyType)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2259,6 +2261,7 @@ int32_t BnKeystoreService::seccomp_IS_HARDWARE_BACKED(const String16& keyType)
 }
 
 
+// added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_CLEAR_UID(int64_t uid)
 {
     int32_t ret = -1;
@@ -2283,7 +2286,7 @@ int32_t BnKeystoreService::seccomp_CLEAR_UID(int64_t uid)
         _exit(0);
     }else{
         // wait for client to request the file descriptor
-        int retcode = seccomp_server();
+        int retcode = seccomp_server(callingUid);
 
         if (retcode == -1)
             ALOGE("keystore send the file descriptor failed");
@@ -2301,15 +2304,14 @@ int32_t BnKeystoreService::seccomp_CLEAR_UID(int64_t uid)
     return ret;
 }
 
+
+// modified in seccomp_keystore
 status_t BnKeystoreService::onTransact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
 {
-
-	struct timeval stop, start;
-	gettimeofday(&start, NULL);
 	
-	uid_t callingUid = IPCThreadState::self()->getCallingUid();
-	ALOGE("CONGZHENG: CALL UID: %d  Code: %d\n", callingUid, code);
+	BnKeystoreService::callingUid = IPCThreadState::self()->getCallingUid();
+	ALOGE("CONGZHENG: CALL UID: %d  Code: %d\n", BnKeystoreService::callingUid, code);
 	
 	//gettimeofday(&stop, NULL);
 	//ALOGE("time %lu", stop.tv_usec - start.tv_usec);
@@ -2336,24 +2338,19 @@ status_t BnKeystoreService::onTransact(
     switch(code) {
         case TEST: {
             CHECK_INTERFACE(IKeystoreService, data, reply);
-            int32_t ret = test();
-            //int32_t ret = seccomp_TEST();
+            //int32_t ret = test();
+            int32_t ret = seccomp_TEST();
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("TEST time %lu", stop.tv_usec - start.tv_usec);
             return NO_ERROR;
         } break;
         case GET: {
-			ALOGE("CONGZHENG %s  %d\n", "GET", code);
             CHECK_INTERFACE(IKeystoreService, data, reply);
             String16 name = data.readString16();
             void* out = NULL;
             size_t outSize = 0;
             int32_t ret;
-			//if(callingUid <= 1000)
-			//	ret = get(name, (uint8_t**) &out, &outSize);
-			//else
+			//ret = get(name, (uint8_t**) &out, &outSize);
 			ret = seccomp_GET(name, (uint8_t**) &out, &outSize);
 			reply->writeNoException();
             if (ret == 1) {
@@ -2365,9 +2362,6 @@ status_t BnKeystoreService::onTransact(
                 reply->writeInt32(-1);
             }
 			reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("GET time %lu", stop.tv_usec - start.tv_usec);
-
             return NO_ERROR;
         } break;
         case INSERT: {
@@ -2387,9 +2381,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_INSERT(name, (const uint8_t*) in, (size_t) inSize, uid, flags); 
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("INSERT time %lu", stop.tv_usec - start.tv_usec);
-
 			return NO_ERROR;
         } break;
         case DEL: {
@@ -2400,9 +2391,6 @@ status_t BnKeystoreService::onTransact(
 			int32_t ret = seccomp_DEL(name, uid);
             reply->writeNoException();
 			reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("DEL time %lu", stop.tv_usec - start.tv_usec);
-
             return NO_ERROR;
         } break;
         case EXIST: {
@@ -2413,9 +2401,6 @@ status_t BnKeystoreService::onTransact(
 			int32_t ret = seccomp_EXIST(name, uid);
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("EXIST time %lu", stop.tv_usec - start.tv_usec);
-
             return NO_ERROR;
         } break;
         case SAW: {
@@ -2432,9 +2417,6 @@ status_t BnKeystoreService::onTransact(
                 reply->writeString16(*it);
             }
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("SAW time %lu", stop.tv_usec - start.tv_usec);
-
 			return NO_ERROR;
         } break;
         case RESET: {
@@ -2443,9 +2425,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_RESET();
 			reply->writeNoException();
 			reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("RESET time %lu", stop.tv_usec - start.tv_usec);
-
             return NO_ERROR;
         } break;
         case PASSWORD: {
@@ -2455,9 +2434,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_PASSWORD(pass);
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("TEST time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case LOCK: {
@@ -2466,9 +2442,6 @@ status_t BnKeystoreService::onTransact(
 			int32_t ret = seccomp_LOCK();
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("LOCK time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case UNLOCK: {
@@ -2478,9 +2451,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_UNLOCK(pass);
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("UNLOCK time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case ZERO: {
@@ -2489,9 +2459,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_ZERO();
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("ZERO time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case GENERATE: {
@@ -2518,9 +2485,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_GENERATE(name, uid, keyType, keySize, flags, &args);
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("GENERATE time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case IMPORT: {
@@ -2540,9 +2504,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_IMPORT(name, (const uint8_t*) in, (size_t) inSize, uid, flags);
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("IMPORT time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case SIGN: {
@@ -2558,7 +2519,7 @@ status_t BnKeystoreService::onTransact(
             }
             void* out = NULL;
             size_t outSize = 0;
-
+			//int32_t ret = sign(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
 			int32_t ret = seccomp_SIGN(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
 			reply->writeNoException();
             if (outSize > 0 && out != NULL) {
@@ -2570,9 +2531,6 @@ status_t BnKeystoreService::onTransact(
                 reply->writeInt32(-1);
             }
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("SIGN time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case VERIFY: {
@@ -2594,14 +2552,10 @@ status_t BnKeystoreService::onTransact(
                 sig = NULL;
                 sigSize = 0;
             }
-            
+            //bool ret = verify(name, (const uint8_t*) in, (size_t) inSize, (const uint8_t*) sig, (size_t) sigSize);
 			bool ret = seccomp_VERIFY(name, (const uint8_t*) in, (size_t) inSize, (const uint8_t*) sig, (size_t) sigSize);
-
             reply->writeNoException();
             reply->writeInt32(ret ? 1 : 0);
-			gettimeofday(&stop, NULL);
-			ALOGE("SIGN time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case GET_PUBKEY: {
@@ -2609,10 +2563,8 @@ status_t BnKeystoreService::onTransact(
             String16 name = data.readString16();
             void* out = NULL;
             size_t outSize = 0;
-
 			int32_t ret = seccomp_GET_PUBKEY(name, (unsigned char **) &out, &outSize);
         	//int32_t ret = get_pubkey(name, (unsigned char**) &out, &outSize);		
-	
             reply->writeNoException();
             if (outSize > 0 && out != NULL) {
                 reply->writeInt32(outSize);
@@ -2623,9 +2575,6 @@ status_t BnKeystoreService::onTransact(
                 reply->writeInt32(-1);
             }
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("GET_PUBKEY time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case DEL_KEY: {
@@ -2636,9 +2585,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_DEL_KEY(name, uid);
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("DEL_KEY time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case GRANT: {
@@ -2649,9 +2595,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_GRANT(name, granteeUid);
 			reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("GRANT time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case UNGRANT: {
@@ -2662,9 +2605,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_UNGRANT(name, granteeUid);
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("UNGRANT time %lu", stop.tv_usec - start.tv_usec);
-		
             return NO_ERROR;
         } break;
         case GETMTIME: {
@@ -2674,9 +2614,6 @@ status_t BnKeystoreService::onTransact(
  			//int64_t ret = getmtime(name);
             reply->writeNoException();
             reply->writeInt64(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("GETMTIME time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         } break;
         case DUPLICATE: {
@@ -2689,9 +2626,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_DUPLICATE(srcKey, srcUid, destKey, destUid);
             reply->writeNoException();
             reply->writeInt32(ret);
-            gettimeofday(&stop, NULL);
-			ALOGE("DUPLICATE time %lu", stop.tv_usec - start.tv_usec);
-	
 			return NO_ERROR;
         } break;
         case IS_HARDWARE_BACKED: {
@@ -2701,9 +2635,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_IS_HARDWARE_BACKED(keyType);
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("IS_HARDWARE_BACKED time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         }
         case CLEAR_UID: {
@@ -2713,9 +2644,6 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_CLEAR_UID(uid);
             reply->writeNoException();
             reply->writeInt32(ret);
-			gettimeofday(&stop, NULL);
-			ALOGE("CLEAR_UID time %lu", stop.tv_usec - start.tv_usec);
-	
             return NO_ERROR;
         }
         default:

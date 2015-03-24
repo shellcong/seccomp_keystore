@@ -129,7 +129,11 @@ public:
 // ----------------------------------------------------------------------------
 
 class BnKeystoreService: public BnInterface<IKeystoreService> {
+
 public:
+
+	uid_t callingUid;
+
     virtual status_t onTransact(uint32_t code, const Parcel& data, Parcel* reply,
             uint32_t flags = 0);
 
