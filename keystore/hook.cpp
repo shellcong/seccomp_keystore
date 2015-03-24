@@ -84,7 +84,7 @@ int seccomp_client(const char* filename, int flag, mode_t mode=0)
 
     int i = 0;
 
-	// if return -8 : this open is not invoked by the request from binder, but from the init code in keystore
+    // if return -8 : this open is not invoked by the request from binder, but from the init code in keystore
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
         ALOGE("keystore seccomp_client() connect() failed\n");
         //close(socket_fd);
@@ -107,7 +107,7 @@ int seccomp_client(const char* filename, int flag, mode_t mode=0)
 
 int open(const char *pathname, int flags, ...)
 {
-	ALOGE("keystore open hook pathname %s %d", pathname, flags);
+    ALOGE("keystore open hook pathname %s %d", pathname, flags);
 
     mode_t  mode = 0;
     flags |= O_LARGEFILE;
@@ -123,11 +123,11 @@ int open(const char *pathname, int flags, ...)
 
     int fd;
 	
-	fd = seccomp_client(pathname, flags, mode);
-	if(fd == -8) 
-		return syscall(SYS_open, pathname, flags, mode);
-	else
-		return fd;
+    fd = seccomp_client(pathname, flags, mode);
+    if(fd == -8) 
+        return syscall(SYS_open, pathname, flags, mode);
+    else
+        return fd;
 }
 
 

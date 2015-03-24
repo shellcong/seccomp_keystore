@@ -648,27 +648,27 @@ int encode_key(char* out, const android::String8& keyName) {
 // added in seccomp_keystore
 int  seccomp_check(char * filename, uid_t callingUid)
 {
-	char const * whitelist[4] = {"/dev/urandom", "/dev/random", "/dev/srandom", ".tmp"};
+    char const * whitelist[4] = {"/dev/urandom", "/dev/random", "/dev/srandom", ".tmp"};
 
-	ALOGE("AAAA %s", filename);
+    ALOGE("AAAA %s", filename);
 
-	// check the filename in whitelist	
-	for (unsigned int i = 0; i < sizeof(whitelist) / sizeof(char const *); i++) {
-		if ( strcmp(filename, whitelist[i]) >= 0) {
-			return 1;
-		}
-	}
+    // check the filename in whitelist	
+    for (unsigned int i = 0; i < sizeof(whitelist) / sizeof(char const *); i++) {
+        if ( strcmp(filename, whitelist[i]) >= 0) {
+            return 1;
+        }
+    }
 	
-	char temp[20];
-	strcpy(temp, "user_0/");
+    char temp[20];
+    strcpy(temp, "user_0/");
 	
-	sprintf(temp + strlen(temp), "%u", callingUid);				
+    sprintf(temp + strlen(temp), "%u", callingUid);				
 
-	// check whether the filename belongs to this calling Uid	
-	if (strstr(filename, temp) == filename)
-		return 1;
-	else
-		return 0;
+    // check whether the filename belongs to this calling Uid	
+    if (strstr(filename, temp) == filename)
+        return 1;
+    else
+        return 0;
 }
 
 
@@ -701,88 +701,87 @@ int seccomp_sendFD(int socket_fd, int send_fd)
     vec.iov_len = sizeof(sendchar);
     ret = sendmsg(socket_fd, &msg, 0);
     if (ret != 1)
-		return -1;
-	
-	return ret;
+        return -1;
+
+    return ret;
 }
 
 // added in seccomp_keystore 
 int seccomp_server(uid_t callingUid)
 {
-	struct sockaddr_un address;
-	int socket_fd, connection_fd;
+    struct sockaddr_un address;
+    int socket_fd, connection_fd;
 
-	struct OpenFile{
-		char filename[250];
-		int flag;
-		mode_t mode;
-	};
+    struct OpenFile{
+        char filename[250];
+        int flag;
+        mode_t mode;   
+    };
 	
-	unlink("./socket");
-	memset(&address, 0, sizeof(struct sockaddr_un));
+    unlink("./socket");
+    memset(&address, 0, sizeof(struct sockaddr_un));
 
-	struct OpenFile myFile;
-	memset(&myFile, 0, sizeof(struct OpenFile));
+    struct OpenFile myFile;
+    memset(&myFile, 0, sizeof(struct OpenFile));
 
-	socklen_t address_length;
+    socklen_t address_length;
 
-	socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if(socket_fd < 0){
-		ALOGE("keystore seccomp_server() socket() failed\n");
-		return -1;
-	}
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (socket_fd < 0){
+        ALOGE("keystore seccomp_server() socket() failed\n");
+        return -1;
+    }
 	
-	address.sun_family = AF_UNIX;
-	strcpy(address.sun_path, "./socket");
-	address_length = sizeof((struct sockaddr *)&address); 
+    address.sun_family = AF_UNIX;
+    strcpy(address.sun_path, "./socket");
+    address_length = sizeof((struct sockaddr *)&address); 
 
-	if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
-		ALOGE("keystore seccomp_server() bind() failed\n");
-		return -1;
-	}
+    if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
+        ALOGE("keystore seccomp_server() bind() failed\n");
+        return -1;
+    }
 
-	if(listen(socket_fd, 5) == -1) {
-		ALOGE("keystore seccomp_server() listen() failed\n");
-		return -1;
-	}
+    if (listen(socket_fd, 5) == -1) {
+        ALOGE("keystore seccomp_server() listen() failed\n");
+        return -1;
+    }
 
-	// continue to recv the socket request until getting the filename "CONGZHENG"
-	while(true) {
+    // continue to recv the socket request until getting the filename "CONGZHENG"
+    while (true) {
+        if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) == -1){
+            ALOGE("keystore seccomp_server() accept() failed\n");
+            return -1;
+        }
 
-		if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) == -1){
-			ALOGE("keystore seccomp_server() accept() failed\n");
-			return -1;
-		}
-
-		read(connection_fd, (char *)&myFile, sizeof(struct OpenFile));
+        read(connection_fd, (char *)&myFile, sizeof(struct OpenFile));
 	
-		// now, we get the filename, flag and mode from the child process
-		if (strcmp(myFile.filename, "CONGZHENG") == 0) {
-			close(connection_fd);
-			break;	
-		}
+        // now, we get the filename, flag and mode from the child process
+        if (strcmp(myFile.filename, "CONGZHENG") == 0) {
+            close(connection_fd);
+            break;	
+        }
 
-		int fd;
+        int fd;
+
+        if (seccomp_check(myFile.filename, callingUid) == 0)
+            fd = -1;		
+        else {
+            if(myFile.mode == 0)
+                fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag));
+            else
+                fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag, myFile.mode));
+        }
 	
-		if (seccomp_check(myFile.filename, callingUid) == 0)
-			fd = -1;		
-		else {
-			if(myFile.mode == 0)
-				fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag));
-			else
-				fd = TEMP_FAILURE_RETRY(syscall(SYS_open, myFile.filename, myFile.flag, myFile.mode));
-		}
-	
-		int ret = seccomp_sendFD(connection_fd, fd);
+        int ret = seccomp_sendFD(connection_fd, fd);
 
-		if(ret == -1 )
-			ALOGE("keystore seccomp_sendFD() failed\n");
+        if(ret == -1 )
+            ALOGE("keystore seccomp_sendFD() failed\n");
 
-		close(connection_fd);		
-	}
+        close(connection_fd);		
+    }
 
-	close(socket_fd);
-	return 0;
+    close(socket_fd);
+    return 0;
 }
 
 
@@ -830,7 +829,7 @@ int seccomp_disconnect()
     write(socket_fd, (char *)&myFile, sizeof(struct OpenFile));
 
     close(socket_fd);
-	return 0; 
+    return 0; 
 }
 
 // added in seccomp_keystore 
@@ -876,40 +875,40 @@ int seccomp_sendRet0(uint8_t * out, size_t outSize, int32_t ret)
 // added in seccomp_keystore 
 int seccomp_sendRet1(unsigned char * out, size_t outSize, int32_t ret)
 {
-	struct sockaddr_un address;
-	int socket_fd;
+    struct sockaddr_un address;
+    int socket_fd;
 
-	struct RET{
-		unsigned char out[1000];
-       	size_t outSize;
-		int32_t ret;
-	};
+    struct RET{
+        unsigned char out[1000];
+        size_t outSize;
+        int32_t ret;
+    };
 
-	struct RET myRet;
+    struct RET myRet;
 	
-	memset(&myRet.out, 0, sizeof(outSize));	
-	memcpy(myRet.out, out , outSize);
-	myRet.outSize = outSize;
-	myRet.ret = ret;
+    memset(&myRet.out, 0, sizeof(outSize));	
+    memcpy(myRet.out, out , outSize);
+    myRet.outSize = outSize;
+    myRet.ret = ret;
 
-	socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd < 0) {
         ALOGE("keystore seccomp_sendRet socket() failed\n");
         return -1;
     }
 
-	memset(&address, 0, sizeof(struct sockaddr_un));
+    memset(&address, 0, sizeof(struct sockaddr_un));
     address.sun_family = AF_UNIX;
-	strcpy(address.sun_path, "./demo_socket3");
+    strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		sleep(0.001);
+	    sleep(0.001);
     }
     
-	write(socket_fd, (char *)&myRet, sizeof(myRet));
+    write(socket_fd, (char *)&myRet, sizeof(myRet));
 
-	close(socket_fd);
-	return 1;
+    close(socket_fd);
+    return 1;
 }
 
 // added in seccomp_keystore 
@@ -937,7 +936,7 @@ int seccomp_sendRet2(int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		sleep(0.001);
+        sleep(0.001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
@@ -949,24 +948,24 @@ int seccomp_sendRet2(int32_t ret)
 // added in seccomp_keystore
 int seccomp_sendRet3(Vector<String16> matches, int32_t ret)
 {
-	struct sockaddr_un address;
+    struct sockaddr_un address;
     int socket_fd;
 
-	struct RET{
-		Vector<String16> matches;
-		int32_t ret;
-	};
+    struct RET{
+        Vector<String16> matches;
+        int32_t ret;
+    };
 
-	struct RET myRet;
+    struct RET myRet;
 
-	Vector<String16>::const_iterator it = matches.begin();
-	for(; it != matches.end(); it++) {
-		myRet.matches.push(*it);
-	}	
+    Vector<String16>::const_iterator it = matches.begin();
+    for(; it != matches.end(); it++) {
+        myRet.matches.push(*it);
+    }	
 	
-	myRet.ret = ret;	
+    myRet.ret = ret;	
 
-	socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd < 0) {
         ALOGE("keystore seccomp_sendRet socket() failed\n");
         return -1;
@@ -978,14 +977,13 @@ int seccomp_sendRet3(Vector<String16> matches, int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		sleep(0.001);
+        sleep(0.001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
 
     close(socket_fd);
     return 1;
-	
 } 
 
 // added in seccomp_keystore
@@ -1013,7 +1011,7 @@ int seccomp_sendRet4(int64_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		sleep(0.001);
+        sleep(0.001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
@@ -1040,7 +1038,7 @@ int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
     socklen_t address_length;
 
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(socket_fd < 0){
+    if (socket_fd < 0){
         ALOGE("keystore seccomp_recvRet socket() failed\n");
         return -1;
     }
@@ -1055,12 +1053,12 @@ int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
         return -1;
     }
 
-    if(listen(socket_fd, 5) != 0) {
+    if (listen(socket_fd, 5) != 0) {
         ALOGE("keystore recvRet listen() failed\n");
         return -1;
     }
 
-    if((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
+    if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
         read(connection_fd, (char *)&myRet, sizeof(struct RET));
         close(connection_fd);
     }
@@ -1079,62 +1077,61 @@ int seccomp_recvRet0(uint8_t** out, size_t * outSize, int32_t * ret)
 // added in seccomp_keystore
 int seccomp_recvRet1(unsigned char ** out, size_t * outSize, int32_t * ret)
 {
-	struct sockaddr_un address;
+    struct sockaddr_un address;
     int socket_fd, connection_fd;
 
-	struct RET{
-		unsigned char out[1000];
-		size_t outSize;
-		int32_t ret;
-	};
+    struct RET{
+        unsigned char out[1000];
+        size_t outSize;
+        int32_t ret;
+    };
 
-	struct RET myRet;
-	memset(myRet.out, 0, sizeof(myRet.out));
+    struct RET myRet;
+    memset(myRet.out, 0, sizeof(myRet.out));
 
     socklen_t address_length;
 
-   	socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(socket_fd < 0){
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (socket_fd < 0){
         ALOGE("keystore seccomp_recvRet socket() failed\n");
         return -1;
     }
 
-	unlink("./demo_socket3");
+    unlink("./demo_socket3");
     address.sun_family = AF_UNIX;
     strcpy(address.sun_path, "./demo_socket3");
-	address_length = sizeof((struct sockaddr *)&address);
+    address_length = sizeof((struct sockaddr *)&address);
 
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
         ALOGE("keystore seccomp_recvRet bind() failed\n");
         return -1;
     }
 
-    if(listen(socket_fd, 5) != 0) {
+    if (listen(socket_fd, 5) != 0) {
         ALOGE("keystore recvRet listen() failed\n");
         return -1;
     }
 
-    if((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length))> -1){
+    if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length))> -1){
         read(connection_fd, (char *)&myRet, sizeof(struct RET));
         close(connection_fd);
     }
 
-	close(socket_fd);
+    close(socket_fd);
 
-	unsigned char * p = (unsigned char *) malloc( myRet.outSize * sizeof(unsigned char));	
-	memcpy(p, myRet.out, myRet.outSize );
-	*out = p;
-	*outSize = myRet.outSize;
-	*ret = myRet.ret;	
-	
-	return 1;	
+    unsigned char * p = (unsigned char *) malloc( myRet.outSize * sizeof(unsigned char));	
+    memcpy(p, myRet.out, myRet.outSize );
+    *out = p;
+    *outSize = myRet.outSize;
+    *ret = myRet.ret;	
+
+    return 1;	
 }
 
 
 // added in seccomp_keystore
 int seccomp_recvRet2(int32_t* ret)
 {
-
     struct sockaddr_un address;
     int socket_fd, connection_fd;
 
@@ -1147,7 +1144,7 @@ int seccomp_recvRet2(int32_t* ret)
     socklen_t address_length;
 
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(socket_fd < 0){
+    if (socket_fd < 0){
         ALOGE("keystore seccomp_recvRet socket() failed\n");
         return -1;
     }
@@ -1155,21 +1152,21 @@ int seccomp_recvRet2(int32_t* ret)
     unlink("./demo_socket3");
     address.sun_family = AF_UNIX;
     strcpy(address.sun_path, "./demo_socket3");
-	address_length = sizeof((struct sockaddr *)&address);
+    address_length = sizeof((struct sockaddr *)&address);
 
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
         ALOGE("keystore seccomp_recvRet bind() failed\n");
         return -1;
     }
 
-    if(listen(socket_fd, 5) != 0) {
+    if (listen(socket_fd, 5) != 0) {
         ALOGE("keystore recvRet listen() failed\n");
         return -1;
     }
 
     connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length);
 
-    if(connection_fd > -1){
+    if (connection_fd > -1){
         read(connection_fd, (char *)&myRet, sizeof(struct RET));
         close(connection_fd);
     }
@@ -1187,17 +1184,17 @@ int seccomp_recvRet3(Vector<String16>* matches, int32_t* ret)
     struct sockaddr_un address;
     int socket_fd, connection_fd;
 
-	struct RET{
+    struct RET{
         Vector<String16> matches;
         int32_t ret;
     };
 
     struct RET myRet;
 
-	socklen_t address_length;
+    socklen_t address_length;
 
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(socket_fd < 0){
+    if (socket_fd < 0){
         ALOGE("keystore seccomp_recvRet socket() failed\n");
         return -1;
     }
@@ -1211,12 +1208,12 @@ int seccomp_recvRet3(Vector<String16>* matches, int32_t* ret)
         return -1;
     }
 
-    if(listen(socket_fd, 5) != 0) {
+    if (listen(socket_fd, 5) != 0) {
         ALOGE("keystore recvRet listen() failed\n");
         return -1;
     }
 
-    if((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
+    if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
         read(connection_fd, (char *)&myRet, sizeof(struct RET));
         close(connection_fd);
     }
@@ -1224,13 +1221,13 @@ int seccomp_recvRet3(Vector<String16>* matches, int32_t* ret)
    close(socket_fd);
 
    Vector<String16>::const_iterator it = myRet.matches.begin();
-    for(; it != myRet.matches.end(); it++) {
-       	(*matches).push(*it);
+   for (; it != myRet.matches.end(); it++) {
+        (*matches).push(*it);
     }
-
+    
     *ret = myRet.ret;
 	
-	return 1;
+    return 1;
 }
 
 // added in seccomp_keystore
@@ -1248,7 +1245,7 @@ int seccomp_recvRet4(int64_t* ret)
     socklen_t address_length;
 
     socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(socket_fd < 0){
+    if (socket_fd < 0){
         ALOGE("keystore seccomp_recvRet socket() failed\n");
         return -1;
     }
@@ -1256,19 +1253,19 @@ int seccomp_recvRet4(int64_t* ret)
     unlink("./demo_socket3");
     address.sun_family = AF_UNIX;
     strcpy(address.sun_path, "./demo_socket3");
-	address_length = sizeof((struct sockaddr *)&address);
+    address_length = sizeof((struct sockaddr *)&address);
 
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) != 0){
         ALOGE("keystore seccomp_recvRet bind() failed\n");
         return -1;
     }
 
-    if(listen(socket_fd, 5) != 0) {
+    if (listen(socket_fd, 5) != 0) {
         ALOGE("keystore recvRet listen() failed\n");
         return -1;
     }
 
-    if((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
+    if ((connection_fd = accept(socket_fd, (struct sockaddr *) &address, &address_length)) > -1){
         read(connection_fd, (char *)&myRet, sizeof(struct RET));
         close(connection_fd);
     }
@@ -1284,26 +1281,25 @@ int seccomp_recvRet4(int64_t* ret)
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_TEST()
 {
-	int32_t ret = -1;
-	pid_t pid = fork();
+    int32_t ret = -1;
+    pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-
-		int32_t retcode = test();
+        int32_t retcode = test();
         ALOGE("%d", retcode);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
-		if (retcode2 == -1)
-			ALOGE("keystore sendRet failed");
+        if (retcode2 == -1)
+            ALOGE("keystore sendRet failed");
         // exit the child process
         _exit(0);
     }else{
@@ -1323,35 +1319,35 @@ int32_t BnKeystoreService::seccomp_TEST()
         int status;
         waitpid(pid, &status, 0 );
     }
-	return ret;
+    return ret;
 }
 
 
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GET(const String16& name, uint8_t** out, size_t* outSize)
 {
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = get(name, out, outSize);
+        int32_t retcode = get(name, out, outSize);
         ALOGE("%d", retcode);
 		
-		seccomp_disconnect();
+        seccomp_disconnect();
 
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet0(*out, *outSize, retcode);
 	        
-		if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+        if (retcode2 == -1)
+        ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1386,19 +1382,19 @@ int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* i
         ALOGE("keystore fork error");
     }else if (pid == 0){
 	
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = insert(name, mydata, inSize, uid, flags);
+        int32_t retcode = insert(name, mydata, inSize, uid, flags);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
 
-		if (retcode2 == -1)
-			ALOGE("keystore send ret failed");	
+        if (retcode2 == -1)
+            ALOGE("keystore send ret failed");	
         // exit the child process
         _exit(0);
     }else{
@@ -1425,26 +1421,26 @@ int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* i
 int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
 {
 
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
         int32_t retcode = del(name, uid);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         
-		if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+        if (retcode2 == -1)
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1470,27 +1466,27 @@ int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
 {
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
 
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = exist(name, uid);
+        int32_t retcode = exist(name, uid);
 
-		seccomp_disconnect();		
+        seccomp_disconnect();		
 
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1502,7 +1498,7 @@ int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
         if(retcode == -1)
             ALOGE("keystore  recv the RET failed");
         
-		// wait the return of child process
+        // wait the return of child process
         int status;
         waitpid(pid, &status, 0 );
     }
@@ -1513,26 +1509,25 @@ int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<String16>* matches)
 {
-
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
         int32_t retcode = saw(name, uid, matches);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet3(*matches, retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1558,24 +1553,24 @@ int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<Str
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_RESET()
 {
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = reset();
+        int32_t retcode = reset();
 		
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
+            ALOGE("keystore send ret failed");
 		// exit the child process
         _exit(0);
     }else{
@@ -1595,7 +1590,7 @@ int32_t BnKeystoreService::seccomp_RESET()
         int status;
         waitpid(pid, &status, 0 );
     }	
-	return ret;
+    return ret;
 }
 
 // added in seccomp_keystore
@@ -1607,19 +1602,19 @@ int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = password(pass);
+        int32_t retcode = password(pass);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1634,7 +1629,7 @@ int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
         if(retcode == -1)
             ALOGE("keystore  recv the RET failed");
         
-		// wait the return of child process
+        // wait the return of child process
         int status;
         waitpid(pid, &status, 0 );
     }
@@ -1651,19 +1646,19 @@ int32_t BnKeystoreService::seccomp_LOCK()
         ALOGE("keystore fork error");
     }else if (pid == 0){
     
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
 	    int32_t retcode = lock();
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1693,20 +1688,20 @@ int32_t BnKeystoreService::seccomp_UNLOCK(const String16& password)
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
-        
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+       
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = unlock(password);
+        int32_t retcode = unlock(password);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1738,19 +1733,19 @@ int32_t BnKeystoreService::seccomp_ZERO()
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = zero();
+        int32_t retcode = zero();
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1765,7 +1760,7 @@ int32_t BnKeystoreService::seccomp_ZERO()
         if(retcode == -1)
             ALOGE("keystore  recv the RET failed");
         
-		// wait the return of child process
+        // wait the return of child process
         int status;
         waitpid(pid, &status, 0 );
     }
@@ -1782,28 +1777,28 @@ int32_t BnKeystoreService::seccomp_GENERATE(const String16& name, int32_t uid, i
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);
 		
-		int32_t retcode = generate(name, uid, keyType, keySize, flags, args);
+        int32_t retcode = generate(name, uid, keyType, keySize, flags, args);
 
-		seccomp_disconnect();			
+        seccomp_disconnect();			
 
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
         int retcode;
 	
-		retcode = seccomp_server(callingUid);
+        retcode = seccomp_server(callingUid);
         
-		// get the return value
+        // get the return value
         retcode = seccomp_recvRet2(&ret);
 
         if(retcode == -1)
@@ -1825,18 +1820,18 @@ int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* d
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = import(name, data, length, uid, flags);
+        int32_t retcode = import(name, data, length, uid, flags);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
+            ALOGE("keystore send ret failed");
 		// exit the child process
         _exit(0);
     }else{
@@ -1865,29 +1860,29 @@ int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* d
 int32_t BnKeystoreService::seccomp_SIGN(const String16& name, const uint8_t* data, size_t length, uint8_t** out, size_t* outLength)
 {
     int32_t ret = -1;
-	// *** BUG ***
-	uint8_t* mydata = (uint8_t *) malloc ( sizeof(uint8_t) * length);
-	memcpy(mydata, data, length);
+    // *** BUG FIX ***
+    uint8_t* mydata = (uint8_t *) malloc ( sizeof(uint8_t) * length);
+    memcpy(mydata, data, length);
 
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
         int32_t retcode = sign(name, mydata, length, out, outLength);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
 
         int retcode2 = seccomp_sendRet0(*out, *outLength, retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1919,19 +1914,19 @@ int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* d
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = verify(name, data, dataLength, signature, signatureLength);
+        int32_t retcode = verify(name, data, dataLength, signature, signatureLength);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -1957,44 +1952,44 @@ int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* d
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_GET_PUBKEY(const String16& name, unsigned char ** out, size_t * outSize)
 {
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
-		ALOGE("keystore fork error");
+        ALOGE("keystore fork error");
     }else if (pid == 0){
 		
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = get_pubkey(name, out, outSize);
+        int32_t retcode = get_pubkey(name, out, outSize);
         
-		seccomp_disconnect();
-		// send back ret,  out, outsize to server
+        seccomp_disconnect();
+        // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet1(*out, *outSize, retcode);
-      	if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+        if (retcode2 == -1)
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
 	}else{
-		// wait for client to request the file descriptor
-		int retcode = seccomp_server(callingUid);
+        // wait for client to request the file descriptor
+        int retcode = seccomp_server(callingUid);
 
-		if (retcode == -1)
-			ALOGE("keystore send the file descriptor failed");
+        if (retcode == -1)
+            ALOGE("keystore send the file descriptor failed");
 
-		// get the return value
-		retcode = seccomp_recvRet1(out, outSize, &ret);
+        // get the return value
+        retcode = seccomp_recvRet1(out, outSize, &ret);
 
-		if(retcode == -1)
-			ALOGE("keystore  recv the RET failed");
+        if(retcode == -1)
+            ALOGE("keystore  recv the RET failed");
 
-		// wait the return of child process
-		int status;
+        // wait the return of child process
+        int status;
         waitpid(pid, &status, 0 );
     }
-	return ret;
+    return ret;
 }
 
 
@@ -2007,20 +2002,20 @@ int32_t BnKeystoreService::seccomp_DEL_KEY(const String16& name, int uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);
 
         int32_t retcode = del_key(name, uid);
 		
-		seccomp_disconnect();
+        seccomp_disconnect();
 
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2052,19 +2047,19 @@ int32_t BnKeystoreService::seccomp_GRANT(const String16& name, int32_t granteeUi
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = grant(name, granteeUid);
+        int32_t retcode = grant(name, granteeUid);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2095,19 +2090,19 @@ int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t grantee
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = ungrant(name, granteeUid);
+        int32_t retcode = ungrant(name, granteeUid);
         ALOGE("%d", retcode);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
-		if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
+        if (retcode2 == -1)
+            ALOGE("keystore send ret failed");
         // exit the child process
         _exit(0);
     }else{
@@ -2133,25 +2128,25 @@ int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t grantee
 // added in seccomp_keystore
 int64_t BnKeystoreService::seccomp_GETMTIME(const String16& name)
 {
-	int64_t ret = -1;
+    int64_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int64_t retcode = getmtime(name);
+        int64_t retcode = getmtime(name);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet4(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2182,19 +2177,19 @@ int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t src
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = duplicate(srcKey, srcUid, destKey, destUid);
+        int32_t retcode = duplicate(srcKey, srcUid, destKey, destUid);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2220,25 +2215,25 @@ int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t src
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_IS_HARDWARE_BACKED(const String16& keyType)
 {   
-	int32_t ret = -1;
+    int32_t ret = -1;
     pid_t pid = fork();
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
-		int32_t retcode = is_hardware_backed(keyType);
+        int32_t retcode = is_hardware_backed(keyType);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2270,19 +2265,19 @@ int32_t BnKeystoreService::seccomp_CLEAR_UID(int64_t uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
     
-		scmp_filter_ctx ctx;
-		ctx = seccomp_init(SCMP_ACT_ALLOW);
-		seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-		seccomp_load(ctx);		
+        scmp_filter_ctx ctx;
+        ctx = seccomp_init(SCMP_ACT_ALLOW);
+        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
+        seccomp_load(ctx);		
 
 	    int32_t retcode = clear_uid(uid);
 
-		seccomp_disconnect();
+        seccomp_disconnect();
         // send back ret,  out, outsize to server
         int retcode2 = seccomp_sendRet2(retcode);
         if (retcode2 == -1)
-			ALOGE("keystore send ret failed");
-		// exit the child process
+            ALOGE("keystore send ret failed");
+        // exit the child process
         _exit(0);
     }else{
         // wait for client to request the file descriptor
@@ -2313,28 +2308,6 @@ status_t BnKeystoreService::onTransact(
 	BnKeystoreService::callingUid = IPCThreadState::self()->getCallingUid();
 	ALOGE("CONGZHENG: CALL UID: %d  Code: %d\n", BnKeystoreService::callingUid, code);
 	
-	//gettimeofday(&stop, NULL);
-	//ALOGE("time %lu", stop.tv_usec - start.tv_usec);
-
-	//prctl(PR_SET_NO_NEW_PRIVS, 1);
-	//prctl(PR_SET_DUMPABLE, 0);	
-
-	//scmp_filter_ctx ctx;
-	//ctx = seccomp_init(SCMP_ACT_ALLOW);
-
-	
-	//10053_USRCERT_bb   10053_USRPKEY_bb
-
-			
-	//seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 2, SCMP_A0(SCMP_CMP_NE, CERT);
-	//seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 2, SCMP_A0(SCMP_CMP_NE, PKEY);
-
-	
-	//if(callingUid > 10000) {
-	//	seccomp.load(ctx);
-
-	//}
-
     switch(code) {
         case TEST: {
             CHECK_INTERFACE(IKeystoreService, data, reply);
@@ -2350,9 +2323,9 @@ status_t BnKeystoreService::onTransact(
             void* out = NULL;
             size_t outSize = 0;
             int32_t ret;
-			//ret = get(name, (uint8_t**) &out, &outSize);
-			ret = seccomp_GET(name, (uint8_t**) &out, &outSize);
-			reply->writeNoException();
+            //ret = get(name, (uint8_t**) &out, &outSize);
+            ret = seccomp_GET(name, (uint8_t**) &out, &outSize);
+            reply->writeNoException();
             if (ret == 1) {
                 reply->writeInt32(outSize);
                 void* buf = reply->writeInplace(outSize);
@@ -2361,7 +2334,7 @@ status_t BnKeystoreService::onTransact(
             } else {
                 reply->writeInt32(-1);
             }
-			reply->writeInt32(ret);
+            reply->writeInt32(ret);
             return NO_ERROR;
         } break;
         case INSERT: {
@@ -2379,9 +2352,9 @@ status_t BnKeystoreService::onTransact(
             int32_t flags = data.readInt32();
             //int32_t ret = insert(name, (const uint8_t*) in, (size_t) inSize, uid, flags);
             int32_t ret = seccomp_INSERT(name, (const uint8_t*) in, (size_t) inSize, uid, flags); 
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
-			return NO_ERROR;
+            return NO_ERROR;
         } break;
         case DEL: {
             CHECK_INTERFACE(IKeystoreService, data, reply);
@@ -2398,7 +2371,7 @@ status_t BnKeystoreService::onTransact(
             String16 name = data.readString16();
             int uid = data.readInt32();
             //int32_t ret = exist(name, uid);
-			int32_t ret = seccomp_EXIST(name, uid);
+            int32_t ret = seccomp_EXIST(name, uid);
             reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
@@ -2409,7 +2382,7 @@ status_t BnKeystoreService::onTransact(
             int uid = data.readInt32();
             Vector<String16> matches;
             //int32_t ret = saw(name, uid, &matches);
-			int32_t ret = seccomp_SAW(name, uid, &matches);		
+            int32_t ret = seccomp_SAW(name, uid, &matches);		
             reply->writeNoException();
             reply->writeInt32(matches.size());
             Vector<String16>::const_iterator it = matches.begin();
@@ -2417,14 +2390,14 @@ status_t BnKeystoreService::onTransact(
                 reply->writeString16(*it);
             }
             reply->writeInt32(ret);
-			return NO_ERROR;
+            return NO_ERROR;
         } break;
         case RESET: {
             CHECK_INTERFACE(IKeystoreService, data, reply);
             //int32_t ret = reset();
             int32_t ret = seccomp_RESET();
-			reply->writeNoException();
-			reply->writeInt32(ret);
+            reply->writeNoException();
+            reply->writeInt32(ret);
             return NO_ERROR;
         } break;
         case PASSWORD: {
@@ -2432,14 +2405,14 @@ status_t BnKeystoreService::onTransact(
             String16 pass = data.readString16();
             //int32_t ret = password(pass);
             int32_t ret = seccomp_PASSWORD(pass);
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
         case LOCK: {
             CHECK_INTERFACE(IKeystoreService, data, reply);
             //int32_t ret = lock();
-			int32_t ret = seccomp_LOCK();
+            int32_t ret = seccomp_LOCK();
             reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
@@ -2449,7 +2422,7 @@ status_t BnKeystoreService::onTransact(
             String16 pass = data.readString16();
             //int32_t ret = unlock(pass); 
             int32_t ret = seccomp_UNLOCK(pass);
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
@@ -2457,7 +2430,7 @@ status_t BnKeystoreService::onTransact(
             CHECK_INTERFACE(IKeystoreService, data, reply);
             //int32_t ret = zero(); 
             int32_t ret = seccomp_ZERO();
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
@@ -2502,7 +2475,7 @@ status_t BnKeystoreService::onTransact(
             int32_t flags = data.readInt32();
             //int32_t ret = import(name, (const uint8_t*) in, (size_t) inSize, uid, flags);
             int32_t ret = seccomp_IMPORT(name, (const uint8_t*) in, (size_t) inSize, uid, flags);
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
@@ -2519,9 +2492,9 @@ status_t BnKeystoreService::onTransact(
             }
             void* out = NULL;
             size_t outSize = 0;
-			//int32_t ret = sign(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
-			int32_t ret = seccomp_SIGN(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
-			reply->writeNoException();
+            //int32_t ret = sign(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
+            int32_t ret = seccomp_SIGN(name, (const uint8_t*) in, (size_t) inSize, (uint8_t**) &out, &outSize);
+            reply->writeNoException();
             if (outSize > 0 && out != NULL) {
                 reply->writeInt32(outSize);
                 void* buf = reply->writeInplace(outSize);
@@ -2553,7 +2526,7 @@ status_t BnKeystoreService::onTransact(
                 sigSize = 0;
             }
             //bool ret = verify(name, (const uint8_t*) in, (size_t) inSize, (const uint8_t*) sig, (size_t) sigSize);
-			bool ret = seccomp_VERIFY(name, (const uint8_t*) in, (size_t) inSize, (const uint8_t*) sig, (size_t) sigSize);
+            bool ret = seccomp_VERIFY(name, (const uint8_t*) in, (size_t) inSize, (const uint8_t*) sig, (size_t) sigSize);
             reply->writeNoException();
             reply->writeInt32(ret ? 1 : 0);
             return NO_ERROR;
@@ -2563,8 +2536,8 @@ status_t BnKeystoreService::onTransact(
             String16 name = data.readString16();
             void* out = NULL;
             size_t outSize = 0;
-			int32_t ret = seccomp_GET_PUBKEY(name, (unsigned char **) &out, &outSize);
-        	//int32_t ret = get_pubkey(name, (unsigned char**) &out, &outSize);		
+            int32_t ret = seccomp_GET_PUBKEY(name, (unsigned char **) &out, &outSize);
+            //int32_t ret = get_pubkey(name, (unsigned char**) &out, &outSize);		
             reply->writeNoException();
             if (outSize > 0 && out != NULL) {
                 reply->writeInt32(outSize);
@@ -2583,7 +2556,7 @@ status_t BnKeystoreService::onTransact(
             int uid = data.readInt32();
             //int32_t ret = del_key(name, uid);
             int32_t ret = seccomp_DEL_KEY(name, uid);
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
@@ -2593,7 +2566,7 @@ status_t BnKeystoreService::onTransact(
             int32_t granteeUid = data.readInt32();
             //int32_t ret = grant(name, granteeUid);
             int32_t ret = seccomp_GRANT(name, granteeUid);
-			reply->writeNoException();
+            reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
         } break;
@@ -2611,7 +2584,7 @@ status_t BnKeystoreService::onTransact(
             CHECK_INTERFACE(IKeystoreService, data, reply);
             String16 name = data.readString16();
             int64_t ret = seccomp_GETMTIME(name);
- 			//int64_t ret = getmtime(name);
+            //int64_t ret = getmtime(name);
             reply->writeNoException();
             reply->writeInt64(ret);
             return NO_ERROR;
@@ -2626,7 +2599,7 @@ status_t BnKeystoreService::onTransact(
             int32_t ret = seccomp_DUPLICATE(srcKey, srcUid, destKey, destUid);
             reply->writeNoException();
             reply->writeInt32(ret);
-			return NO_ERROR;
+            return NO_ERROR;
         } break;
         case IS_HARDWARE_BACKED: {
             CHECK_INTERFACE(IKeystoreService, data, reply);

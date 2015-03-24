@@ -575,13 +575,13 @@ public:
 
 
     ResponseCode readBlob(const char* filename, AES_KEY *aes_key, State state) {
-		// send the filename and flag back to the server and get the file descriptor
+        // send the filename and flag back to the server and get the file descriptor
 
-		int in;
-		in = TEMP_FAILURE_RETRY(open(filename, O_RDONLY));    
+        int in;
+        in = TEMP_FAILURE_RETRY(open(filename, O_RDONLY));    
   
-		if (in < 0) {
-			ALOGE("NOT FOUND FILE !!!!!!!!!!!!!!!!");
+        if (in < 0) {
+            ALOGE("NOT FOUND FILE !!!!!!!!!!!!!!!!");
             return (errno == ENOENT) ? KEY_NOT_FOUND : SYSTEM_ERROR;
         }
         // fileLength may be less than sizeof(mBlob) since the in
@@ -723,11 +723,11 @@ public:
     }
 
     ResponseCode readMasterKey(const android::String8& pw, Entropy* entropy) {
-		int in;
-		in = TEMP_FAILURE_RETRY(open(mMasterKeyFile, O_RDONLY));
+        int in;
+        in = TEMP_FAILURE_RETRY(open(mMasterKeyFile, O_RDONLY));
         
-		if (in < 0) {
-			ALOGE("NOT FOUND MASTER KEY !!!!!!!!");
+        if (in < 0) {
+            ALOGE("NOT FOUND MASTER KEY !!!!!!!!");
             return SYSTEM_ERROR;
         }
 
@@ -1342,11 +1342,11 @@ private:
     }
 
     void readMetaData() {
-		int in;
+        int in;
 
-		in = TEMP_FAILURE_RETRY(open(sMetaDataFile, O_RDONLY));
+        in = TEMP_FAILURE_RETRY(open(sMetaDataFile, O_RDONLY));
         if (in < 0) {
-			ALOGE("NOT FOUND META DATA  !!!!!!!!!!!!!");
+            ALOGE("NOT FOUND META DATA  !!!!!!!!!!!!!");
             return;
         }
         size_t fileLength = readFully(in, (uint8_t*) &mMetaData, sizeof(mMetaData));
@@ -1359,9 +1359,9 @@ private:
 
     void writeMetaData() {
         const char* tmpFileName = ".metadata.tmp";
-		int out;
-			out= TEMP_FAILURE_RETRY(open(tmpFileName,
-                O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR));
+        int out;
+        out= TEMP_FAILURE_RETRY(open(tmpFileName,
+             O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR));
         if (out < 0) {
             ALOGE("couldn't write metadata file: %s", strerror(errno));
             return;
@@ -1476,9 +1476,6 @@ public:
 
     int32_t get(const String16& name, uint8_t** item, size_t* itemLength) {
         uid_t callingUid = IPCThreadState::self()->getCallingUid();
-
-
-		ALOGE("CONGZHENG uid2: %d", callingUid);
 
         if (!has_permission(callingUid, P_GET)) {
             ALOGW("permission denied for %d: get", callingUid);
@@ -2025,7 +2022,7 @@ public:
      */
     int32_t get_pubkey(const String16& name, uint8_t** pubkey, size_t* pubkeyLength) {
         
-		uid_t callingUid = IPCThreadState::self()->getCallingUid();
+        uid_t callingUid = IPCThreadState::self()->getCallingUid();
         if (!has_permission(callingUid, P_GET)) {
             ALOGW("permission denied for %d: get_pubkey", callingUid);
             return ::PERMISSION_DENIED;
@@ -2187,7 +2184,7 @@ public:
             return -1L;
         }
         int fd;
-		fd = TEMP_FAILURE_RETRY(open(filename.string(), O_NOFOLLOW, O_RDONLY));
+        fd = TEMP_FAILURE_RETRY(open(filename.string(), O_NOFOLLOW, O_RDONLY));
         if (fd < 0) {
             ALOGW("could not open %s for getmtime", filename.string());
             return -1L;
@@ -2361,8 +2358,6 @@ private:
 
 int main(int argc, char* argv[]) {
 
-	ALOGE("CONGZHENG");
-	
     if (argc < 2) {
         ALOGE("A directory must be specified!");
         return 1;
