@@ -650,11 +650,10 @@ int  seccomp_check(char * filename, uid_t callingUid)
 {
     char const * whitelist[4] = {"/dev/urandom", "/dev/random", "/dev/srandom", ".tmp"};
 
-    ALOGE("AAAA %s", filename);
-
     // check the filename in whitelist	
     for (unsigned int i = 0; i < sizeof(whitelist) / sizeof(char const *); i++) {
-        if ( strcmp(filename, whitelist[i]) >= 0) {
+        if ( strcmp(filename, whitelist[i]) == 0) {
+            ALOGE("RETURN");
             return 1;
         }
     }
@@ -663,7 +662,7 @@ int  seccomp_check(char * filename, uid_t callingUid)
     strcpy(temp, "user_0/");
 	
     sprintf(temp + strlen(temp), "%u", callingUid);				
-
+    
     // check whether the filename belongs to this calling Uid	
     if (strstr(filename, temp) == filename)
         return 1;
@@ -818,7 +817,7 @@ int seccomp_disconnect()
     int i = 0;
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
         ALOGE("keystore seccomp_disconnect() connect() failed\n");
-        sleep(0.001);
+        sleep(0.000001);
         if(i > 3){
             close(socket_fd);
             return -1;
@@ -862,7 +861,7 @@ int seccomp_sendRet0(uint8_t * out, size_t outSize, int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while(connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		sleep(0.001);
+		sleep(0.000001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(struct RET));
@@ -902,7 +901,7 @@ int seccomp_sendRet1(unsigned char * out, size_t outSize, int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-	    sleep(0.001);
+	    sleep(0.000001);
     }
     
     write(socket_fd, (char *)&myRet, sizeof(myRet));
@@ -936,7 +935,7 @@ int seccomp_sendRet2(int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-        sleep(0.001);
+        sleep(0.000001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
@@ -977,7 +976,7 @@ int seccomp_sendRet3(Vector<String16> matches, int32_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-        sleep(0.001);
+        sleep(0.000001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
@@ -1011,7 +1010,7 @@ int seccomp_sendRet4(int64_t ret)
     strcpy(address.sun_path, "./demo_socket3");
 
     while (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-        sleep(0.001);
+        sleep(0.000001);
     }
 
     write(socket_fd, (char *)&myRet, sizeof(myRet));
