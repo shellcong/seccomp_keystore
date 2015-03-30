@@ -11,7 +11,6 @@ Even though SEAndroid is applied into Android after version 4.4, the above attac
 
 We propose a new design for keystore daemon, whose capabilities will be restricted strictly by the seccomp mode. For each service request for keystore daemon, we fork a new keystore process. Before the new keystore process executes, the seccomp is enabled to prohibit the "open" system call. So, the new keystore process can only read and write already-opened file descriptors, which are created in the dispatcher process. The dispatcher checks the requesting app when it opens key files. In this defense, even if keystore can be exploited, it can not read or write other apps' data for the current app. 
 
-
 2. DESIGN
 
 Our goal is to strengthen the data isolation protection in keystore daemon. Our general idea is forking a new keystore process to handle each service request from the keystore binder, and applying seccomp into the forked child process to restrict system calls. 
@@ -26,7 +25,6 @@ Our goal is to strengthen the data isolation protection in keystore daemon. Our 
 
 According to our design, the real keystore working process is the child process and it cannot call any libc "open" functions or direct "open" system call because of  the seccomp restriction. The "open" is really done in the dispatcher and the filename can be checked according to the UID of requesting app. So, this new keystore design with seccomp can prevent this new attack.
 
-
 3. INSTALLATION
  1) Modify the init.rc. Add line "setenv LD_PRELOAD /system/lib/libhook.so"  in service keystore. 
  2) replace "/system/bin/keystore", "/system/lib/libkeystore_binder.so" and "/system/lib/libhook.so" with our instrumented version. 
@@ -35,10 +33,8 @@ You should compile a libseccomp.so together with Android source codes
 
 My experiment is set on Android-x86-4.4 (http://www.android-x86.org) with 3.18.0 kernel. I have not tested it on other versions or ARM platform. Please give me feedback if you test on other versions or platforms.  
 
-
 4. TEST 
 We tested the overhead performance after the instrumentation by writing a demo app ( /keystore/test/demo.apk.tar.gz). In this demo app, we invoke some keystore sdk APIs to send different requests to keystore daemon. After comparing results of the original and our new keystore, the average overhead for each request is about 400-500 microseconds. 
-
 
 5. SUMMARY
 An vulnerability can destroy the data isolation protection of keystore daemon. We apply the seccomp mode to restrict the capability of keystore daemon to achieve a strong data isolation protection. 
