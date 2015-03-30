@@ -2,7 +2,7 @@
 
 
 OVERVIEW
-====
+==
 
 In recent years, a lot of vulnerabilities in Android native daemons have been revealed in AOSP, not to mention OEM customized daemons. A stack buffer overflow vulnerability (CVE-2014-3100) was found in keystore daemon before 4.4 version last year. This vulnerability could be exploited for the arbitrary code execution after bypass the DEP, ASLR and stack cookie. Due to the serious fragmentation problem of Android, there are still many old devices under the threat of this vulnerability now, and more vulnerabilities in Android native daemons will be revealed in the future, especially for OEM daemons. Currently, we are only focusing on the keystore daemon, and will expand it to other vulnerable daemons in the future. 
 
