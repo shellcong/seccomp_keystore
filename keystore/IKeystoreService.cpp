@@ -52,6 +52,12 @@
 #include <sys/syscall.h>
 #include <sys/timeb.h>
 
+
+
+
+
+
+
 namespace android {
 
 KeystoreArg::KeystoreArg(const void* data, size_t len)
@@ -1277,6 +1283,54 @@ int seccomp_recvRet4(int64_t* ret)
 }
 
 
+
+
+
+void seccomp_enable()
+{
+   
+    scmp_filter_ctx ctx;
+    ctx = seccomp_init(SCMP_ACT_KILL);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write),0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(sigreturn), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mkdir), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(readdir), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rename), 0); 
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(renameat), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(unlink), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(unlinkat), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mmap2), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(madvise), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(close), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(munmap), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mprotect), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl64), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fstat64), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(gettimeofday), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(brk), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(chdir), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(writev), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(socket), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(connect), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(nanosleep), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(access), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(ioctl), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(prctl), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mkdir), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(writev), 0);    
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(connect), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(accept), 0);
+
+    seccomp_load(ctx);	
+
+}
+
+
+
+
+
 // added in seccomp_keystore
 int32_t BnKeystoreService::seccomp_TEST()
 {
@@ -1286,10 +1340,7 @@ int32_t BnKeystoreService::seccomp_TEST()
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();
 
         int32_t retcode = test();
         ALOGE("%d", retcode);
@@ -1331,10 +1382,7 @@ int32_t BnKeystoreService::seccomp_GET(const String16& name, uint8_t** out, size
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();		
 
         int32_t retcode = get(name, out, outSize);
         ALOGE("%d", retcode);
@@ -1381,10 +1429,7 @@ int32_t BnKeystoreService::seccomp_INSERT(const String16& name, const uint8_t* i
         ALOGE("keystore fork error");
     }else if (pid == 0){
 	
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = insert(name, mydata, inSize, uid, flags);
 
@@ -1426,10 +1471,7 @@ int32_t BnKeystoreService::seccomp_DEL(const String16& name, int uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();
 
         int32_t retcode = del(name, uid);
 
@@ -1472,10 +1514,7 @@ int32_t BnKeystoreService::seccomp_EXIST(const String16& name, int uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();		
 
         int32_t retcode = exist(name, uid);
 
@@ -1514,10 +1553,7 @@ int32_t BnKeystoreService::seccomp_SAW(const String16& name, int uid, Vector<Str
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();
 
         int32_t retcode = saw(name, uid, matches);
 
@@ -1558,10 +1594,7 @@ int32_t BnKeystoreService::seccomp_RESET()
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();
 
         int32_t retcode = reset();
 		
@@ -1601,10 +1634,7 @@ int32_t BnKeystoreService::seccomp_PASSWORD(const String16& pass)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = password(pass);
 
@@ -1645,10 +1675,7 @@ int32_t BnKeystoreService::seccomp_LOCK()
         ALOGE("keystore fork error");
     }else if (pid == 0){
     
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
 	    int32_t retcode = lock();
 
@@ -1688,10 +1715,7 @@ int32_t BnKeystoreService::seccomp_UNLOCK(const String16& password)
         ALOGE("keystore fork error");
     }else if (pid == 0){
        
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = unlock(password);
 
@@ -1732,10 +1756,7 @@ int32_t BnKeystoreService::seccomp_ZERO()
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = zero();
 
@@ -1776,10 +1797,7 @@ int32_t BnKeystoreService::seccomp_GENERATE(const String16& name, int32_t uid, i
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);
+        seccomp_enable();
 		
         int32_t retcode = generate(name, uid, keyType, keySize, flags, args);
 
@@ -1819,10 +1837,7 @@ int32_t BnKeystoreService::seccomp_IMPORT(const String16& name, const uint8_t* d
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = import(name, data, length, uid, flags);
 
@@ -1868,10 +1883,7 @@ int32_t BnKeystoreService::seccomp_SIGN(const String16& name, const uint8_t* dat
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = sign(name, mydata, length, out, outLength);
 
@@ -1913,10 +1925,7 @@ int32_t BnKeystoreService::seccomp_VERIFY(const String16& name, const uint8_t* d
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = verify(name, data, dataLength, signature, signatureLength);
 
@@ -1957,10 +1966,7 @@ int32_t BnKeystoreService::seccomp_GET_PUBKEY(const String16& name, unsigned cha
         ALOGE("keystore fork error");
     }else if (pid == 0){
 		
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();
 
         int32_t retcode = get_pubkey(name, out, outSize);
         
@@ -2001,10 +2007,7 @@ int32_t BnKeystoreService::seccomp_DEL_KEY(const String16& name, int uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
 
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);
+        seccomp_enable();
 
         int32_t retcode = del_key(name, uid);
 		
@@ -2046,10 +2049,7 @@ int32_t BnKeystoreService::seccomp_GRANT(const String16& name, int32_t granteeUi
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = grant(name, granteeUid);
 
@@ -2089,10 +2089,7 @@ int32_t BnKeystoreService::seccomp_UNGRANT(const String16& name, int32_t grantee
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = ungrant(name, granteeUid);
         ALOGE("%d", retcode);
@@ -2132,11 +2129,8 @@ int64_t BnKeystoreService::seccomp_GETMTIME(const String16& name)
     if (pid == -1){
         ALOGE("keystore fork error");
     }else if (pid == 0){
-
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        
+        seccomp_enable();
 
         int64_t retcode = getmtime(name);
 
@@ -2176,10 +2170,7 @@ int32_t BnKeystoreService::seccomp_DUPLICATE(const String16& srcKey, int32_t src
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = duplicate(srcKey, srcUid, destKey, destUid);
 
@@ -2220,10 +2211,7 @@ int32_t BnKeystoreService::seccomp_IS_HARDWARE_BACKED(const String16& keyType)
         ALOGE("keystore fork error");
     }else if (pid == 0){
         
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
         int32_t retcode = is_hardware_backed(keyType);
 
@@ -2264,10 +2252,7 @@ int32_t BnKeystoreService::seccomp_CLEAR_UID(int64_t uid)
         ALOGE("keystore fork error");
     }else if (pid == 0){
     
-        scmp_filter_ctx ctx;
-        ctx = seccomp_init(SCMP_ACT_ALLOW);
-        seccomp_rule_add(ctx, SCMP_ACT_KILL, SCMP_SYS(open), 0);
-        seccomp_load(ctx);		
+        seccomp_enable();	
 
 	    int32_t retcode = clear_uid(uid);
 
